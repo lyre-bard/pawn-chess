@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pawn Chess - Upgraded Prototype</title>
+    <style>
+        body { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background-color: #f0f0f0; margin: 0; font-family: sans-serif; padding: 20px; box-sizing: border-box; }
+        h1 { margin: 5px 0; color: #333; font-size: 28px; }
+        
+        .container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; align-items: flex-start; max-width: 1000px; width: 100%; }
+        .game-area { display: flex; flex-direction: column; align-items: center; }
+
+        #score-board { display: flex; gap: 20px; font-size: 16px; margin-bottom: 10px; background: #fff; padding: 10px 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .score { font-weight: bold; }
+        #turn-indicator { font-size: 18px; font-weight: bold; margin-bottom: 15px; padding: 8px 20px; border-radius: 5px; background-color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        
+        /* Control Panel */
+        .controls { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; justify-content: center; }
+        button { padding: 8px 16px; font-size: 14px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; background-color: #333; color: #fff; transition: background 0.2s; }
+        button:hover { background-color: #555; }
+        #btn-reset { background-color: #d9534f; }
+        #btn-reset:hover { background-color: #c9302c; }
+
+        /* Chess Board */
+        #board { display: grid; grid-template-columns: repeat(8, min(60px, 11vw)); grid-template-rows: repeat(8, min(60px, 11vw)); border: 4px solid #333; box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
+        .cell { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: min(35px, 6.5vw); cursor: pointer; user-select: none; position: relative; }
+        .white { background-color: #f0d9b5; }
+        .black { background-color: #b58863; }
+        .selected { background-color: #7ab87a !important; }
+        .movable { position: absolute; width: 25%; height: 25%; background-color: rgba(0, 255, 0, 0.5); border-radius: 50%; pointer-events: none; }
+        .attackable { position: absolute; width: 80%; height: 80%; border: 4px solid rgba(255, 0, 0, 0.6); border-radius: 50%; pointer-events: none; }
+
+        /* Sidebar Log */
+        .sidebar { width: 240px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 15px; display: flex; flex-direction: column; height: min(490px, 90vw); box-sizing: border-box; }
+        .sidebar h3 { margin-top: 0; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 5px; color: #444; }
+        #log-container { flex-grow: 1; overflow-y: auto; font-size: 13px; color: #555; line-height: 1.6; }
+        .log-entry { border-bottom: 1px solid #f9f9f9; padding: 3px 0; }
+
+        /* Modal Style */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fff; padding: 25px; border-radius: 10px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.2); position: relative; }
+        .close-btn { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; color: #aaa; }
+        .close-btn:hover { color: #000; }
+        .modal h2 { margin-top: 0; color: #333; }
+        .modal ul { padding-left: 20px; line-height: 1.5; }
+
+        @media (max-width: 768px) {
+            .container { flex-direction: column; }
+            .sidebar { width: 100%; height: auto; max-height: 300px; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>♟️ Pawn Chess</h1>
+    
+    <div class="container">
+        <div class="game-area">
+            <div id="score-board">
+                <div class="score" style="color: #000;">⬛ Black (P1): <span id="p1-score">0</span> / 2</div>
+                <div class="score" style="color: #555;">⬜ White (P2): <span id="p2-score">0</span> / 2</div>
+            </div>
+
+            <div class="controls">
+                <button id="btn-rules">📜 Show Rules</button>
+                <button id="btn-undo">↩️ Undo</button>
+                <button id="btn-reset">🔄 Reset</button>
+            </div>
+
+            <div id="turn-indicator">Black (P1) Turn</div>
+            <div id="board"></div>
+        </div>
+
+        <div class="sidebar">
+            <h3>📋 Move History</h3>
+            <div id="log-container"></div>
+        </div>
+    </div>
+
+    <div id="rules-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" id="close-modal">&times;</span>
+            <h2>📜 Pawn Chess Rules</h2>
+            <ul>
+                <li><strong>Objective:</strong> First player to safely escape <b>2 pieces</b> through the opponent's baseline wins.</li>
+                <li><strong>Movement:</strong> EVERY piece on the board moves exactly <b>1 square</b> at a time.</li>
+                <li><strong>Pawns:</strong> Arranged in a zigzag pattern. Move straight forward, attack diagonally. Backline pawns can move 2 squares on their very first move. If frontally locked, you can slip away diagonally.</li>
+                <li><strong>Backline Pieces (R, N, B, Q, K):</strong> Move 1 square diagonally. They are color-locked to their initial tiles.</li>
+                <li><strong>Straight Attacks & Color Shifts:</strong> 
+                    <ul>
+                        <li>R, N, B can capture their exact counterpart straight ahead.</li>
+                        <li>Queens can capture any backline piece straight ahead (cannot attack Pawns straight ahead).</li>
+                        <li>Kings can capture Queens and Kings straight ahead.</li>
+                        <li>When capturing straight ahead, the piece moves forward and dynamically changes its color property to the new tile.</li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const boardEl = document.getElementById('board');
+        const turnEl = document.getElementById('turn-indicator');
+        const p1ScoreEl = document.getElementById('p1-score');
+        const p2ScoreEl = document.getElementById('p2-score');
+        const logContainer = document.getElementById('log-container');
+        
+        // Buttons & Modal
+        document.getElementById('btn-reset').addEventListener('click', resetGame);
+        document.getElementById('btn-undo').addEventListener('click', undoMove);
+        document.getElementById('btn-rules').addEventListener('click', () => document.getElementById('rules-modal').style.display = 'flex');
+        document.getElementById('close-modal').addEventListener('click', () => document.getElementById('rules-modal').style.display = 'none');
+        window.addEventListener('click', (e) => { if(e.target === document.getElementById('rules-modal')) document.getElementById('rules-modal').style.display = 'none'; });
+
+        let currentTurn = 'P1'; let selectedCell = null; let validMoves = [];
+        let p1Escaped = 0; let p2Escaped = 0; let isGameOver = false;
+        let boardState = [];
+        let moveHistory = [];
+        let logHistory = [];
+
+        const unicodePieces = {
+            'P1': { 'P': '♟️', 'R': '♜', 'N': '♞', 'B': '♝', 'Q': '♛', 'K': '👑' },
+            'P2': { 'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '👑' }
+        };
+
+        function initGame() {
+            boardState = [
+                [{type:'R', p:'P1', c:'W'}, {type:'N', p:'P1', c:'B'}, {type:'B', p:'P1', c:'W'}, {type:'Q', p:'P1', c:'B'}, {type:'K', p:'P1', c:'W'}, {type:'B', p:'P1', c:'B'}, {type:'N', p:'P1', c:'W'}, {type:'R', p:'P1', c:'B'}],
+                [{type:'P', p:'P1', c:'B', moved:false}, null, {type:'P', p:'P1', c:'B', moved:false}, null, {type:'P', p:'P1', c:'B', moved:false}, null, {type:'P', p:'P1', c:'B', moved:false}, null],
+                [null, {type:'P', p:'P1', c:'W', moved:false}, null, {type:'P', p:'P1', c:'W', moved:false}, null, {type:'P', p:'P1', c:'W', moved:false}, null, {type:'P', p:'P1', c:'W', moved:false}],
+                [null, null, null, null, null, null, null, null],
+                [null, null, null, null, null, null, null, null],
+                [{type:'P', p:'P2', c:'W', moved:false}, null, {type:'P', p:'P2', c:'W', moved:false}, null, {type:'P', p:'P2', c:'W', moved:false}, null, {type:'P', p:'P2', c:'W', moved:false}, null],
+                [null, {type:'P', p:'P2', c:'B', moved:false}, null, {type:'P', p:'P2', c:'B', moved:false}, null, {type:'P', p:'P2', c:'B', moved:false}, null, {type:'P', p:'P2', c:'B', moved:false}],
+                [{type:'R', p:'P2', c:'B'}, {type:'N', p:'P2', c:'W'}, {type:'B', p:'P2', c:'B'}, {type:'Q', p:'P2', c:'W'}, {type:'K', p:'P2', c:'B'}, {type:'B', p:'P2', c:'W'}, {type:'N', p:'P2', c:'B'}, {type:'R', p:'P2', c:'W'}]
+            ];
+            moveHistory = [];
+            logHistory = [];
+            currentTurn = 'P1';
+            selectedCell = null;
+            validMoves = [];
+            p1Escaped = 0;
+            p2Escaped = 0;
+            isGameOver = false;
+            updateLog("🎮 Game started!");
+            drawBoard();
+        }
+
+        function drawBoard() {
+            boardEl.innerHTML = '';
+            p1ScoreEl.innerText = p1Escaped;
+            p2ScoreEl.innerText = p2Escaped;
+
+            if (isGameOver) {
+                turnEl.innerText = "🎉 Game Over!";
+                return;
+            }
+
+            turnEl.innerText = currentTurn === 'P1' ? "⬛ Black (P1) Turn" : "⬜ White (P2) Turn";
+
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const cell = document.createElement('div');
+                    const cellColor = (r + c) % 2 === 0 ? 'white' : 'black';
+                    cell.className = `cell ${cellColor}`;
+                    const piece = boardState[r][c];
+
+                    if (piece) {
+                        cell.innerText = unicodePieces[piece.p][piece.type];
+                        if (piece.p === 'P1') {
+                            cell.style.color = '#000';
+                            cell.style.textShadow = 'none';
+                        } else {
+                            cell.style.color = '#fff';
+                            cell.style.textShadow = '0px 0px 4px #000';
+                        }
+                    }
+
+                    if (selectedCell && selectedCell.r === r && selectedCell.c === c) {
+                        cell.classList.add('selected');
+                    }
+
+                    const moveIdx = validMoves.findIndex(m => m.r === r && m.c === c);
+                    if (moveIdx !== -1) {
+                        const marker = document.createElement('div');
+                        marker.className = validMoves[moveIdx].type === 'attack' ? 'attackable' : 'movable';
+                        cell.appendChild(marker);
+                    }
+
+                    cell.addEventListener('click', () => handleCellClick(r, c));
+                    boardEl.appendChild(cell);
+                }
+            }
+        }
+
+        function handleCellClick(r, c) {
+            if (isGameOver) return;
+
+            const piece = boardState[r][c];
+            const isMoveOption = validMoves.find(m => m.r === r && m.c === c);
+
+            if (isMoveOption) {
+                const selectedPiece = boardState[selectedCell.r][selectedCell.c];
+                const targetCellColor = (r + c) % 2 === 0 ? 'W' : 'B';
+
+                moveHistory.push(JSON.parse(JSON.stringify({
+                    board: boardState,
+                    p1Escaped: p1Escaped,
+                    p2Escaped: p2Escaped,
+                    currentTurn: currentTurn
+                })));
+
+                if (isMoveOption.type === 'attack') {
+                    selectedPiece.c = targetCellColor;
+                }
+
+                if (selectedPiece.type === 'P') {
+                    selectedPiece.moved = true;
+                }
+
+                boardState[selectedCell.r][selectedCell.c] = null;
+
+                const isEscapeZone = (selectedPiece.p === 'P1' && r === 7) || (selectedPiece.p === 'P2' && r === 0);
+
+                if (isEscapeZone) {
+                    boardState[r][c] = null;
+                    if (selectedPiece.p === 'P1') {
+                        p1Escaped++;
+                        updateLog(`🏃 P1: ${selectedPiece.type} escaped!`);
+                        alert(`🏃 Black piece (${selectedPiece.type}) successfully escaped!`);
+                    } else {
+                        p2Escaped++;
+                        updateLog(`🏃 P2: ${selectedPiece.type} escaped!`);
+                        alert(`🏃 White piece (${selectedPiece.type}) successfully escaped!`);
+                    }
+
+                    if (p1Escaped >= 2) {
+                        isGameOver = true;
+                        drawBoard();
+                        setTimeout(() => alert("🏆 Black (P1) Player Wins!"), 50);
+                        updateLog("🏆 Black (P1) WINS!");
+                        return;
+                    }
+
+                    if (p2Escaped >= 2) {
+                        isGameOver = true;
+                        drawBoard();
+                        setTimeout(() => alert("🏆 White (P2) Player Wins!"), 50);
+                        updateLog("🏆 White (P2) WINS!");
+                        return;
+                    }
+                } else {
+                    boardState[r][c] = selectedPiece;
+                    const fromPos = String.fromCharCode(65 + selectedCell.c) + (8 - selectedCell.r);
+                    const toPos = String.fromCharCode(65 + c) + (8 - r);
+                    updateLog(`${currentTurn}: ${selectedPiece.type} ${fromPos} → ${toPos}`);
+                }
+
+                currentTurn = currentTurn === 'P1' ? 'P2' : 'P1';
+                selectedCell = null;
+                validMoves = [];
+                drawBoard();
+                return;
+            }
+
+            if (piece && piece.p === currentTurn) {
+                selectedCell = { r, c };
+                validMoves = calculateMoves(r, c, piece);
+                drawBoard();
+            } else {
+                selectedCell = null;
+                validMoves = [];
+                drawBoard();
+            }
+        }
+
+        function calculateMoves(r, c, piece) {
+            const moves = [];
+
+            if (piece.type === 'P') {
+                const dir = piece.p === 'P1' ? 1 : -1;
+
+                if (r + dir >= 0 && r + dir < 8 && !boardState[r + dir][c]) {
+                    moves.push({ r: r + dir, c, type: 'move' });
+                    const isBackLine = (piece.p === 'P1' && r === 1) || (piece.p === 'P2' && r === 6);
+                    if (!piece.moved && isBackLine && !boardState[r + (dir * 2)][c]) {
+                        moves.push({ r: r + (dir * 2), c, type: 'move' });
+                    }
+                }
+
+                [-1, 1].forEach(dc => {
+                    const nr = r + dir;
+                    const nc = c + dc;
+                    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                        const target = boardState[nr][nc];
+                        if (target && target.p !== piece.p) {
+                            moves.push({ r: nr, c: nc, type: 'attack' });
+                        }
+                    }
+                });
+
+                if (r + dir >= 0 && r + dir < 8) {
+                    const frontTarget = boardState[r + dir][c];
+                    if (frontTarget && frontTarget.p !== piece.p && frontTarget.type === 'P') {
+                        [-1, 1].forEach(dc => {
+                            const nr = r + dir;
+                            const nc = c + dc;
+                            if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && !boardState[nr][nc]) {
+                                moves.push({ r: nr, c: nc, type: 'move' });
+                            }
+                        });
+                    }
+                }
+            } else {
+                const diagDirs = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+                diagDirs.forEach(([dr, dc]) => {
+                    const nr = r + dr;
+                    const nc = c + dc;
+                    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                        const nextCellColor = (nr + nc) % 2 === 0 ? 'W' : 'B';
+                        if (piece.c === nextCellColor) {
+                            const target = boardState[nr][nc];
+                            if (!target) {
+                                moves.push({ r: nr, c: nc, type: 'move' });
+                            } else if (target.p !== piece.p) {
+                                moves.push({ r: nr, c: nc, type: 'attack' });
+                            }
+                        }
+                    }
+                });
+
+                const frontDir = piece.p === 'P1' ? 1 : -1;
+                const nr = r + frontDir;
+                if (nr >= 0 && nr < 8) {
+                    const target = boardState[nr][c];
+                    if (target && target.p !== piece.p) {
+                        if (['R', 'B', 'N'].includes(piece.type) && target.type === piece.type) {
+                            moves.push({ r: nr, c, type: 'attack' });
+                        }
+                        if (piece.type === 'Q' && ['R', 'N', 'B', 'Q'].includes(target.type)) {
+                            moves.push({ r: nr, c, type: 'attack' });
+                        }
+                        if (piece.type === 'K' && ['K', 'Q'].includes(target.type)) {
+                            moves.push({ r: nr, c, type: 'attack' });
+                        }
+                    }
+                }
+            }
+
+            return moves;
+        }
+
+        function updateLog(message) {
+            logHistory.unshift(message);
+            if (logHistory.length > 50) logHistory.pop();
+            logContainer.innerHTML = logHistory.map(log => `<div class="log-entry">${log}</div>`).join('');
+            logContainer.scrollTop = 0;
+        }
+
+        function undoMove() {
+            if (moveHistory.length === 0) {
+                alert("No moves to undo!");
+                return;
+            }
+            const prevState = moveHistory.pop();
+            boardState = JSON.parse(JSON.stringify(prevState.board));
+            p1Escaped = prevState.p1Escaped;
+            p2Escaped = prevState.p2Escaped;
+            currentTurn = prevState.currentTurn;
+            selectedCell = null;
+            validMoves = [];
+            updateLog("↩️ Move undone");
+            drawBoard();
+        }
+
+        function resetGame() {
+            if (confirm("Reset the game? All progress will be lost.")) {
+                initGame();
+                updateLog("🔄 Game reset");
+            }
+        }
+
+        initGame();
+    </script>
+</body>
+</html>
