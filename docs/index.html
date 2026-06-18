@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pawn Chess - Upgraded Prototype</title>
     <style>
-        body { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background-color: #f0f0f0; margin: 0; font-family: sans-serif; padding: 20px; box-sizing: border-box; }
+        body { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background-color: #f0f0f0; margin: 0; font-family: sans-serif; padding: 20px; }
         h1 { margin: 5px 0; color: #333; font-size: 28px; }
         
         .container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; align-items: flex-start; max-width: 1000px; width: 100%; }
@@ -16,14 +16,20 @@
         #turn-indicator { font-size: 18px; font-weight: bold; margin-bottom: 15px; padding: 8px 20px; border-radius: 5px; background-color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         
         /* Control Panel */
-        .controls { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; justify-content: center; }
+        .controls { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; justify-content: center; align-items: center; }
         button { padding: 8px 16px; font-size: 14px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; background-color: #333; color: #fff; transition: background 0.2s; }
         button:hover { background-color: #555; }
         #btn-reset { background-color: #d9534f; }
         #btn-reset:hover { background-color: #c9302c; }
 
+        /* Pawn Layout Selector */
+        .layout-selector { display: flex; align-items: center; gap: 8px; background: #fff; padding: 8px 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .layout-selector label { font-weight: bold; color: #333; font-size: 14px; margin: 0; }
+        .layout-selector select { padding: 6px 10px; font-size: 13px; border: 1px solid #ccc; border-radius: 3px; cursor: pointer; background-color: #fff; }
+        .layout-selector select:hover { border-color: #999; }
+
         /* Chess Board */
-        #board { display: grid; grid-template-columns: repeat(8, min(60px, 11vw)); grid-template-rows: repeat(8, min(60px, 11vw)); border: 4px solid #333; box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
+        #board { display: grid; grid-template-columns: repeat(8, min(60px, 11vw)); grid-template-rows: repeat(8, min(60px, 11vw)); border: 4px solid #333; box-shadow: 0 4px 10px rgba(0,0,0,0.15); margin-bottom: 15px; }
         .cell { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: min(35px, 6.5vw); cursor: pointer; user-select: none; position: relative; }
         .white { background-color: #f0d9b5; }
         .black { background-color: #b58863; }
@@ -48,6 +54,8 @@
         @media (max-width: 768px) {
             .container { flex-direction: column; }
             .sidebar { width: 100%; height: auto; max-height: 300px; }
+            .controls { flex-direction: column; }
+            .layout-selector { width: 100%; justify-content: center; }
         }
     </style>
 </head>
@@ -63,6 +71,15 @@
             </div>
 
             <div class="controls">
+                <div class="layout-selector">
+                    <label for="pawn-layout">Pawn Layout:</label>
+                    <select id="pawn-layout">
+                        <option value="zigzag">Zigzag Open (Default)</option>
+                        <option value="front">Front Row Only</option>
+                        <option value="back">Back Row Only</option>
+                        <option value="random">Random Open</option>
+                    </select>
+                </div>
                 <button id="btn-rules">📜 Show Rules</button>
                 <button id="btn-undo">↩️ Undo</button>
                 <button id="btn-reset">🔄 Reset</button>
@@ -85,7 +102,15 @@
             <ul>
                 <li><strong>Objective:</strong> First player to safely escape <b>2 pieces</b> through the opponent's baseline wins.</li>
                 <li><strong>Movement:</strong> EVERY piece on the board moves exactly <b>1 square</b> at a time.</li>
-                <li><strong>Pawns:</strong> Arranged in a zigzag pattern. Move straight forward, attack diagonally. Backline pawns can move 2 squares on their very first move. If frontally locked, you can slip away diagonally.</li>
+                <li><strong>Pawns:</strong> Move straight forward, attack diagonally. Any unmoved backline pawn can move 2 squares on their very first move. If frontally locked, can move diagonally.</li>
+                <li><strong>Pawn Opening Layouts:</strong>
+                    <ul>
+                        <li><strong>Zigzag Open (Default):</strong> Alternating zigzag pattern on rows 1 & 2.</li>
+                        <li><strong>Front Row Only:</strong> All 8 pawns deployed on row 1 (closest to center).</li>
+                        <li><strong>Back Row Only:</strong> All 8 pawns deployed on row 2 (in front of backline).</li>
+                        <li><strong>Random Open:</strong> Pawns randomly distributed between rows 1 & 2.</li>
+                    </ul>
+                </li>
                 <li><strong>Backline Pieces (R, N, B, Q, K):</strong> Move 1 square diagonally. They are color-locked to their initial tiles.</li>
                 <li><strong>Straight Attacks & Color Shifts:</strong> 
                     <ul>
@@ -105,8 +130,16 @@
         const p1ScoreEl = document.getElementById('p1-score');
         const p2ScoreEl = document.getElementById('p2-score');
         const logContainer = document.getElementById('log-container');
+        const layoutSelector = document.getElementById('pawn-layout');
         
         // Buttons & Modal
+        layoutSelector.addEventListener('change', () => {
+            if (confirm("Changing layout will reset the game. Continue?")) {
+                resetGame();
+            } else {
+                layoutSelector.value = currentLayout;
+            }
+        });
         document.getElementById('btn-reset').addEventListener('click', resetGame);
         document.getElementById('btn-undo').addEventListener('click', undoMove);
         document.getElementById('btn-rules').addEventListener('click', () => document.getElementById('rules-modal').style.display = 'flex');
@@ -118,22 +151,100 @@
         let boardState = [];
         let moveHistory = [];
         let logHistory = [];
+        let currentLayout = 'zigzag';
 
         const unicodePieces = {
             'P1': { 'P': '♟️', 'R': '♜', 'N': '♞', 'B': '♝', 'Q': '♛', 'K': '👑' },
             'P2': { 'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '👑' }
         };
 
+        // Pawn Layout Generator Functions
+        function createZigzagLayout() {
+            const p1Row1 = [{type:'P', p:'P1', c:'B', moved:false}, null, {type:'P', p:'P1', c:'B', moved:false}, null, {type:'P', p:'P1', c:'B', moved:false}, null, {type:'P', p:'P1', c:'B', moved:false}, null];
+            const p1Row2 = [null, {type:'P', p:'P1', c:'W', moved:false}, null, {type:'P', p:'P1', c:'W', moved:false}, null, {type:'P', p:'P1', c:'W', moved:false}, null, {type:'P', p:'P1', c:'W', moved:false}];
+            const p2Row1 = [{type:'P', p:'P2', c:'W', moved:false}, null, {type:'P', p:'P2', c:'W', moved:false}, null, {type:'P', p:'P2', c:'W', moved:false}, null, {type:'P', p:'P2', c:'W', moved:false}, null];
+            const p2Row2 = [null, {type:'P', p:'P2', c:'B', moved:false}, null, {type:'P', p:'P2', c:'B', moved:false}, null, {type:'P', p:'P2', c:'B', moved:false}, null, {type:'P', p:'P2', c:'B', moved:false}];
+            return { p1Row1, p1Row2, p2Row1, p2Row2 };
+        }
+
+        function createFrontRowLayout() {
+            const p1Row1 = Array(8).fill(null).map((_, i) => ({type:'P', p:'P1', c: (i % 2 === 0 ? 'W' : 'B'), moved:false}));
+            const p1Row2 = Array(8).fill(null);
+            const p2Row1 = Array(8).fill(null).map((_, i) => ({type:'P', p:'P2', c: (i % 2 === 0 ? 'W' : 'B'), moved:false}));
+            const p2Row2 = Array(8).fill(null);
+            return { p1Row1, p1Row2, p2Row1, p2Row2 };
+        }
+
+        function createBackRowLayout() {
+            const p1Row1 = Array(8).fill(null);
+            const p1Row2 = Array(8).fill(null).map((_, i) => ({type:'P', p:'P1', c: (i % 2 === 0 ? 'W' : 'B'), moved:false}));
+            const p2Row1 = Array(8).fill(null);
+            const p2Row2 = Array(8).fill(null).map((_, i) => ({type:'P', p:'P2', c: (i % 2 === 0 ? 'W' : 'B'), moved:false}));
+            return { p1Row1, p1Row2, p2Row1, p2Row2 };
+        }
+
+        function createRandomLayout() {
+            const createRandomRow = (player, targetCount) => {
+                const row = Array(8).fill(null);
+                let placed = 0;
+                while (placed < targetCount) {
+                    const idx = Math.floor(Math.random() * 8);
+                    if (!row[idx]) {
+                        row[idx] = {type:'P', p:player, c: (idx % 2 === 0 ? 'W' : 'B'), moved:false};
+                        placed++;
+                    }
+                }
+                return row;
+            };
+
+            const p1Row1 = createRandomRow('P1', Math.floor(Math.random() * 5) + 2); // 2-6 pawns
+            const p1Row2 = Array(8).fill(null).map((_, i) => p1Row1[i] ? null : {type:'P', p:'P1', c: (i % 2 === 0 ? 'W' : 'B'), moved:false});
+            const p1Row2Clean = p1Row2.filter(x => x !== null);
+            const p1Row2Final = Array(8).fill(null);
+            p1Row2Clean.forEach((pawn, i) => {
+                let pos = Math.floor(Math.random() * 8);
+                while (p1Row2Final[pos]) pos = (pos + 1) % 8;
+                p1Row2Final[pos] = pawn;
+            });
+
+            const p2Row1 = createRandomRow('P2', Math.floor(Math.random() * 5) + 2);
+            const p2Row2 = Array(8).fill(null).map((_, i) => p2Row1[i] ? null : {type:'P', p:'P2', c: (i % 2 === 0 ? 'W' : 'B'), moved:false});
+            const p2Row2Clean = p2Row2.filter(x => x !== null);
+            const p2Row2Final = Array(8).fill(null);
+            p2Row2Clean.forEach((pawn, i) => {
+                let pos = Math.floor(Math.random() * 8);
+                while (p2Row2Final[pos]) pos = (pos + 1) % 8;
+                p2Row2Final[pos] = pawn;
+            });
+
+            return { p1Row1, p1Row2: p1Row2Final, p2Row1, p2Row2: p2Row2Final };
+        }
+
+        function getPawnLayout() {
+            const layout = layoutSelector.value;
+            currentLayout = layout;
+            
+            switch(layout) {
+                case 'front': return createFrontRowLayout();
+                case 'back': return createBackRowLayout();
+                case 'random': return createRandomLayout();
+                case 'zigzag':
+                default: return createZigzagLayout();
+            }
+        }
+
         function initGame() {
+            const pawnLayout = getPawnLayout();
+            
             boardState = [
                 [{type:'R', p:'P1', c:'W'}, {type:'N', p:'P1', c:'B'}, {type:'B', p:'P1', c:'W'}, {type:'Q', p:'P1', c:'B'}, {type:'K', p:'P1', c:'W'}, {type:'B', p:'P1', c:'B'}, {type:'N', p:'P1', c:'W'}, {type:'R', p:'P1', c:'B'}],
-                [{type:'P', p:'P1', c:'B', moved:false}, null, {type:'P', p:'P1', c:'B', moved:false}, null, {type:'P', p:'P1', c:'B', moved:false}, null, {type:'P', p:'P1', c:'B', moved:false}, null],
-                [null, {type:'P', p:'P1', c:'W', moved:false}, null, {type:'P', p:'P1', c:'W', moved:false}, null, {type:'P', p:'P1', c:'W', moved:false}, null, {type:'P', p:'P1', c:'W', moved:false}],
+                pawnLayout.p1Row1,
+                pawnLayout.p1Row2,
                 [null, null, null, null, null, null, null, null],
                 [null, null, null, null, null, null, null, null],
-                [{type:'P', p:'P2', c:'W', moved:false}, null, {type:'P', p:'P2', c:'W', moved:false}, null, {type:'P', p:'P2', c:'W', moved:false}, null, {type:'P', p:'P2', c:'W', moved:false}, null],
-                [null, {type:'P', p:'P2', c:'B', moved:false}, null, {type:'P', p:'P2', c:'B', moved:false}, null, {type:'P', p:'P2', c:'B', moved:false}, null, {type:'P', p:'P2', c:'B', moved:false}],
-                [{type:'R', p:'P2', c:'B'}, {type:'N', p:'P2', c:'W'}, {type:'B', p:'P2', c:'B'}, {type:'Q', p:'P2', c:'W'}, {type:'K', p:'P2', c:'B'}, {type:'B', p:'P2', c:'W'}, {type:'N', p:'P2', c:'B'}, {type:'R', p:'P2', c:'W'}]
+                pawnLayout.p2Row1,
+                pawnLayout.p2Row2,
+                [{type:'R', p:'P2', c:'B'}, {type:'N', p:'P2', c:'W'}, {type:'B', p:'P2', c:'B'}, {type:'Q', p:'P2', c:'W'}, {type:'K', p:'P2', c:'B'}, {type:'B', p:'P2', c:'W'}, {type:'N', p:'P2', c:'B'}, {type:'R', p:'P2', c:'W'}],
             ];
             moveHistory = [];
             logHistory = [];
@@ -143,7 +254,13 @@
             p1Escaped = 0;
             p2Escaped = 0;
             isGameOver = false;
-            updateLog("🎮 Game started!");
+            const layoutName = {
+                'zigzag': 'Zigzag Open',
+                'front': 'Front Row Only',
+                'back': 'Back Row Only',
+                'random': 'Random Open'
+            }[currentLayout];
+            updateLog(`🎮 Game started with ${layoutName}!`);
             drawBoard();
         }
 
@@ -204,6 +321,7 @@
                 const selectedPiece = boardState[selectedCell.r][selectedCell.c];
                 const targetCellColor = (r + c) % 2 === 0 ? 'W' : 'B';
 
+                // Save state for undo
                 moveHistory.push(JSON.parse(JSON.stringify({
                     board: boardState,
                     p1Escaped: p1Escaped,
@@ -283,8 +401,8 @@
 
                 if (r + dir >= 0 && r + dir < 8 && !boardState[r + dir][c]) {
                     moves.push({ r: r + dir, c, type: 'move' });
-                    const isBackLine = (piece.p === 'P1' && r === 1) || (piece.p === 'P2' && r === 6);
-                    if (!piece.moved && isBackLine && !boardState[r + (dir * 2)][c]) {
+                    // Allow 2-square move if pawn hasn't moved yet, regardless of starting row
+                    if (!piece.moved && !boardState[r + (dir * 2)][c]) {
                         moves.push({ r: r + (dir * 2), c, type: 'move' });
                     }
                 }
@@ -375,12 +493,11 @@
         }
 
         function resetGame() {
-            if (confirm("Reset the game? All progress will be lost.")) {
-                initGame();
-                updateLog("🔄 Game reset");
-            }
+            initGame();
+            updateLog("🔄 Game reset");
         }
 
+        // Initialize game on page load
         initGame();
     </script>
 </body>
